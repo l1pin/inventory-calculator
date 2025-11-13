@@ -36,7 +36,7 @@ COMMENT ON COLUMN tables.upload_time IS 'Время загрузки табли�
 CREATE TABLE table_items (
   id SERIAL PRIMARY KEY,
   table_id TEXT NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
-  item_id INTEGER NOT NULL,
+  item_id TEXT NOT NULL,
   base_cost DECIMAL(10, 2),
   total_cost DECIMAL(10, 2),
   commission INTEGER,
