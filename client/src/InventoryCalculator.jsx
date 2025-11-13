@@ -1158,6 +1158,30 @@ const InventoryCalculator = () => {
     }
   }, [tables, tableDataLoadingStatus, addNotification]);
 
+  // Загрузка данных всех таблиц (для глобальных представлений)
+  const loadAllTablesData = useCallback(async () => {
+    console.log(`📥 Загрузка данных всех ${tables.length} таблиц...`);
+
+    const loadPromises = tables.map(table => {
+      // Пропускаем таблицы, которые уже загружены или загружаются
+      const hasData = table.data && table.data.length > 0;
+      const isLoading = tableDataLoadingStatus[table.id] === 'loading';
+
+      if (hasData || isLoading) {
+        return Promise.resolve();
+      }
+
+      return loadTableData(table.id);
+    });
+
+    try {
+      await Promise.all(loadPromises);
+      console.log(`✅ Все таблицы загружены`);
+    } catch (error) {
+      console.error(`❌ Ошибка при загрузке таблиц:`, error);
+    }
+  }, [tables, tableDataLoadingStatus, loadTableData]);
+
   // Загрузка данных при запуске приложения
   useEffect(() => {
     if (!isDataLoaded) {
@@ -1231,6 +1255,17 @@ const InventoryCalculator = () => {
       loadTableData(activeTableId);
     }
   }, [activeTableId, isDataLoaded, loadTableData]);
+
+  // Переключение на глобальное представление с загрузкой всех таблиц
+  const switchToGlobalView = useCallback((section) => {
+    // Сначала переключаем секцию
+    setCurrentSection(section);
+
+    // Затем загружаем все таблицы в фоне
+    loadAllTablesData().catch((error) => {
+      console.error("❌ Ошибка загрузки данных для глобального представления:", error);
+    });
+  }, [loadAllTablesData]);
 
   // Обработчик клика по строке
   const handleRowClick = useCallback((itemId) => {
@@ -5818,7 +5853,7 @@ const InventoryCalculator = () => {
             </button>
           )}
           <button
-            onClick={() => setCurrentSection("price_changed_global")}
+            onClick={() => switchToGlobalView("price_changed_global")}
             className={`nav-button nav-button--price-changed ${
               currentSection === "price_changed_global"
                 ? "nav-button--active"
@@ -5829,7 +5864,7 @@ const InventoryCalculator = () => {
             {globalAnalytics.uniquePriceChangedItems})
           </button>
           <button
-            onClick={() => setCurrentSection("commented_global")}
+            onClick={() => switchToGlobalView("commented_global")}
             className={`nav-button nav-button--commented ${
               currentSection === "commented_global"
                 ? "nav-button--active"
@@ -5840,7 +5875,7 @@ const InventoryCalculator = () => {
             {globalAnalytics.uniqueCommentedItems})
           </button>
           <button
-            onClick={() => setCurrentSection("new_global")}
+            onClick={() => switchToGlobalView("new_global")}
             className={`nav-button nav-button--new ${
               currentSection === "new_global"
                 ? "nav-button--active"
@@ -5851,7 +5886,7 @@ const InventoryCalculator = () => {
             {globalCategories.new.size})
           </button>
           <button
-            onClick={() => setCurrentSection("optimization_global")}
+            onClick={() => switchToGlobalView("optimization_global")}
             className={`nav-button nav-button--optimization ${
               currentSection === "optimization_global"
                 ? "nav-button--active"
@@ -5862,7 +5897,7 @@ const InventoryCalculator = () => {
             {globalCategories.optimization.size})
           </button>
           <button
-            onClick={() => setCurrentSection("ab_global")}
+            onClick={() => switchToGlobalView("ab_global")}
             className={`nav-button nav-button--ab ${
               currentSection === "ab_global"
                 ? "nav-button--active"
@@ -5873,7 +5908,7 @@ const InventoryCalculator = () => {
             {globalCategories.ab.size})
           </button>
           <button
-            onClick={() => setCurrentSection("c_sale_global")}
+            onClick={() => switchToGlobalView("c_sale_global")}
             className={`nav-button nav-button--c-sale ${
               currentSection === "c_sale_global"
                 ? "nav-button--active"
@@ -5884,7 +5919,7 @@ const InventoryCalculator = () => {
             {globalCategories.c_sale.size})
           </button>
           <button
-            onClick={() => setCurrentSection("off_season_global")}
+            onClick={() => switchToGlobalView("off_season_global")}
             className={`nav-button nav-button--off-season ${
               currentSection === "off_season_global"
                 ? "nav-button--active"
@@ -5895,7 +5930,7 @@ const InventoryCalculator = () => {
             {globalCategories.off_season.size})
           </button>
           <button
-            onClick={() => setCurrentSection("unprofitable_global")}
+            onClick={() => switchToGlobalView("unprofitable_global")}
             className={`nav-button nav-button--unprofitable ${
               currentSection === "unprofitable_global"
                 ? "nav-button--active"
@@ -6105,7 +6140,7 @@ const InventoryCalculator = () => {
                 </button>
               )}
               <button
-                onClick={() => setCurrentSection("price_changed_global")}
+                onClick={() => switchToGlobalView("price_changed_global")}
                 className="quick-action quick-action--prices"
               >
                 <div className="quick-action-icon">📈</div>
@@ -6115,7 +6150,7 @@ const InventoryCalculator = () => {
                 </div>
               </button>
               <button
-                onClick={() => setCurrentSection("commented_global")}
+                onClick={() => switchToGlobalView("commented_global")}
                 className="quick-action quick-action--comments"
               >
                 <div className="quick-action-icon">💬</div>
