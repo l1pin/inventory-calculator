@@ -320,7 +320,18 @@ async function migrateTables(appData) {
 
       // Вставляем товары таблицы
       if (table.data && Array.isArray(table.data)) {
-        const items = table.data.map(item => ({
+        // Удаляем дубликаты по item_id (оставляем последнее вхождение)
+        const uniqueItemsMap = new Map();
+        table.data.forEach(item => {
+          uniqueItemsMap.set(item.id, item);
+        });
+        const uniqueData = Array.from(uniqueItemsMap.values());
+
+        if (uniqueData.length < table.data.length) {
+          console.log(`      ⚠️  Найдено дубликатов: ${table.data.length - uniqueData.length}, оставлены уникальные: ${uniqueData.length}`);
+        }
+
+        const items = uniqueData.map(item => ({
           table_id: String(table.id),
           item_id: item.id,
           base_cost: item.baseCost,
@@ -361,7 +372,7 @@ async function migrateTables(appData) {
           const batch = items.slice(j, j + batchSize);
           const { error: itemsError } = await supabase
             .from('table_items')
-            .upsert(batch, { onConflict: 'table_id,item_id' });
+            .insert(batch, { ignoreDuplicates: true });
 
           if (itemsError) {
             console.error(`      ❌ Ошибка при вставке товаров ${j}-${j + batch.length}:`, itemsError);
