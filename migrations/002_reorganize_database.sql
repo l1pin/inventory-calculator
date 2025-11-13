@@ -420,13 +420,17 @@ BEGIN
 END $$;
 
 -- Переименовываем индексы (если еще не переименованы)
+-- Проверяем НЕ существование целевого индекса перед переименованием
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_table_id' AND schemaname = 'public') THEN
+  -- Переименовываем только если целевой индекс НЕ существует
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_table_id' AND schemaname = 'public')
+     AND EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_table_id' AND schemaname = 'public') THEN
     ALTER INDEX idx_table_items_new_table_id RENAME TO idx_table_items_table_id;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_item_id' AND schemaname = 'public') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_item_id' AND schemaname = 'public')
+     AND EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_item_id' AND schemaname = 'public') THEN
     ALTER INDEX idx_table_items_new_item_id RENAME TO idx_table_items_item_id;
   END IF;
 END $$;
