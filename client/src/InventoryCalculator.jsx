@@ -494,6 +494,9 @@ const InventoryCalculator = () => {
   const [xmlLastUpdate, setXmlLastUpdate] = useState({});
   const [xmlDataCounts, setXmlDataCounts] = useState({}); // Новое состояние для количества позиций
 
+  // Состояние для отслеживания загрузки данных отдельных таблиц (lazy loading)
+  const [tableDataLoadingStatus, setTableDataLoadingStatus] = useState({});
+
   // Глобальные фильтры для спецальных представлений
   const [globalViewFilters, setGlobalViewFilters] = useState({
     currentPage: 1,
@@ -1107,6 +1110,54 @@ const InventoryCalculator = () => {
     }
   }, []);
 
+  // Загрузка данных конкретной таблицы (lazy loading)
+  const loadTableData = useCallback(async (tableId) => {
+    if (!tableId) return;
+
+    // Проверяем, не загружена ли уже таблица
+    const currentTable = tables.find(t => t.id === tableId);
+    if (currentTable && currentTable.data && currentTable.data.length > 0) {
+      console.log(`✅ Таблица ${tableId} уже загружена, пропускаем`);
+      return;
+    }
+
+    // Проверяем, не загружается ли уже
+    if (tableDataLoadingStatus[tableId] === 'loading') {
+      console.log(`⏳ Таблица ${tableId} уже загружается, пропускаем`);
+      return;
+    }
+
+    try {
+      console.log(`📥 Загрузка данных таблицы: ${tableId}`);
+      setTableDataLoadingStatus(prev => ({ ...prev, [tableId]: 'loading' }));
+
+      const response = await fetch(`/api/tables/${tableId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const tableData = await response.json();
+      console.log(`📦 Получены данные таблицы ${tableId}: ${tableData.data?.length || 0} позиций`);
+
+      // Обновляем таблицу в state
+      setTables(prevTables =>
+        prevTables.map(table =>
+          table.id === tableId
+            ? { ...table, data: tableData.data || [] }
+            : table
+        )
+      );
+
+      setTableDataLoadingStatus(prev => ({ ...prev, [tableId]: 'loaded' }));
+      console.log(`✅ Таблица ${tableId} успешно загружена`);
+
+    } catch (error) {
+      console.error(`❌ Ошибка загрузки таблицы ${tableId}:`, error);
+      setTableDataLoadingStatus(prev => ({ ...prev, [tableId]: 'error' }));
+      addNotification(`⚠️ Не удалось загрузить данные таблицы`);
+    }
+  }, [tables, tableDataLoadingStatus, addNotification]);
+
   // Загрузка данных при запуске приложения
   useEffect(() => {
     if (!isDataLoaded) {
@@ -1173,6 +1224,13 @@ const InventoryCalculator = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [saveStatus]);
+
+  // Автоматическая загрузка данных таблицы при переключении activeTableId
+  useEffect(() => {
+    if (activeTableId && isDataLoaded) {
+      loadTableData(activeTableId);
+    }
+  }, [activeTableId, isDataLoaded, loadTableData]);
 
   // Обработчик клика по строке
   const handleRowClick = useCallback((itemId) => {
