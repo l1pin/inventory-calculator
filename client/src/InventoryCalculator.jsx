@@ -1526,29 +1526,64 @@ const InventoryCalculator = () => {
     "https://api.codetabs.com/v1/proxy?quest=",
   ];
 
-  const fetchWithCorsHandling = async (url, description) => {
-    try {
-      // Используем Netlify Functions proxy для обхода CORS
-      const proxyUrl = `/api/fetch-xml?url=${encodeURIComponent(url)}`;
-      console.log(`📥 Загрузка ${description} через proxy`);
+  const fetchWithCorsHandling = async (url, description, retries = 2) => {
+    const proxyUrl = `/api/fetch-xml?url=${encodeURIComponent(url)}`;
 
-      const response = await fetch(proxyUrl, {
-        method: "GET",
-        headers: {
-          Accept: "application/xml, text/xml, */*",
-        },
-      });
+    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+      try {
+        console.log(`📥 Загрузка ${description} через proxy (попытка ${attempt}/${retries + 1})`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const response = await fetch(proxyUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/xml, text/xml, */*",
+          },
+        });
+
+        if (!response.ok) {
+          // Пытаемся получить детали ошибки из ответа
+          let errorDetails = `status ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errorDetails = errorData.error || errorData.message || errorDetails;
+          } catch (e) {
+            // Если не JSON, используем statusText
+            errorDetails = response.statusText || errorDetails;
+          }
+
+          // Для 502 и 504 можем попробовать еще раз
+          const shouldRetry = (response.status === 502 || response.status === 504) && attempt < retries + 1;
+
+          if (shouldRetry) {
+            console.log(`⚠️ Попытка ${attempt} неудачна (${response.status}), повтор через 2 сек...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue; // Повторяем попытку
+          }
+
+          const errorMsg = response.status === 502
+            ? `Сервер XML недоступен или перегружен`
+            : response.status === 504
+            ? `Превышено время ожидания загрузки XML (30 сек)`
+            : `Ошибка загрузки: ${errorDetails}`;
+
+          throw new Error(errorMsg);
+        }
+
+        const xmlText = await response.text();
+        console.log(`✅ ${description} загружены, размер: ${xmlText.length} байт`);
+        return xmlText;
+
+      } catch (error) {
+        // Если это последняя попытка, пробрасываем ошибку
+        if (attempt === retries + 1) {
+          console.error(`❌ Ошибка загрузки ${description} после ${attempt} попыток:`, error);
+          throw new Error(`Не удалось загрузить ${description}: ${error.message}`);
+        }
+
+        // Если не последняя попытка и ошибка сети, повторяем
+        console.log(`⚠️ Попытка ${attempt} неудачна, повтор через 2 сек...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
-
-      const xmlText = await response.text();
-      console.log(`✅ ${description} загружены, размер: ${xmlText.length} байт`);
-      return xmlText;
-    } catch (error) {
-      console.error(`❌ Ошибка загрузки ${description}:`, error);
-      throw new Error(`Не удалось загрузить ${description}: ${error.message}`);
     }
   };
 
