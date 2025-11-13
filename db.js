@@ -431,45 +431,25 @@ async function saveXmlStatus(key, status, lastUpdate, dataCount) {
 // ============================================================================
 
 /**
- * Получить все данные приложения (аналог GET /api/data)
+ * Получить данные конкретной таблицы
  */
-async function getAllAppData() {
+async function getTableData(tableId) {
   try {
-    // Загружаем все данные параллельно
-    const [
-      tables,
-      globalCommissions,
-      globalItemChanges,
-      crmCategories,
-      crmData,
-      promData,
-      xmlStatusCrm,
-      xmlStatusProm
-    ] = await Promise.all([
-      getAllTables(),
-      getGlobalCommissions(),
-      getGlobalItemChanges(),
-      getCrmCategories(),
-      getGlobalXmlData('crm'),
-      getGlobalXmlData('prom'),
-      getXmlStatus('global_crm'),
-      getXmlStatus('global_prom')
+    const [table, items] = await Promise.all([
+      getTableById(tableId),
+      getTableItems(tableId)
     ]);
 
-    // Для каждой таблицы загружаем товары и XML данные
-    const tablesWithData = await Promise.all(
-      tables.map(async (table) => {
-        const [items, xmlData] = await Promise.all([
-          getTableItems(table.id),
-          getTableXmlData(table.id)
-        ]);
+    if (!table) {
+      throw new Error(`Table ${tableId} not found`);
+    }
 
-        return {
-          id: table.id,
-          name: table.name,
-          fileName: table.file_name,
-          uploadTime: table.upload_time,
-          data: items.map(item => ({
+    return {
+      id: table.id,
+      name: table.name,
+      fileName: table.file_name,
+      uploadTime: table.upload_time,
+      data: items.map(item => ({
             id: item.item_id,
             baseCost: item.base_cost,
             totalCost: item.total_cost,
@@ -500,13 +480,53 @@ async function getAllAppData() {
             markup90: item.markup90,
             markup100: item.markup100
           }))
-        };
-      })
-    );
+    };
+  } catch (error) {
+    console.error('Ошибка загрузки данных таблицы:', error);
+    throw error;
+  }
+}
+
+/**
+ * Получить все данные приложения БЕЗ данных таблиц (только метаданные)
+ * Данные таблиц загружаются отдельно через getTableData()
+ */
+async function getAllAppData() {
+  try {
+    // Загружаем все данные параллельно
+    const [
+      tables,
+      globalCommissions,
+      globalItemChanges,
+      crmCategories,
+      crmData,
+      promData,
+      xmlStatusCrm,
+      xmlStatusProm
+    ] = await Promise.all([
+      getAllTables(),
+      getGlobalCommissions(),
+      getGlobalItemChanges(),
+      getCrmCategories(),
+      getGlobalXmlData('crm'),
+      getGlobalXmlData('prom'),
+      getXmlStatus('global_crm'),
+      getXmlStatus('global_prom')
+    ]);
+
+    // Возвращаем только метаданные таблиц (БЕЗ data)
+    // Данные будут загружаться отдельно через GET /api/tables/:id
+    const tablesMetadata = tables.map(table => ({
+      id: table.id,
+      name: table.name,
+      fileName: table.file_name,
+      uploadTime: table.upload_time,
+      data: [] // Пустой массив - данные загружаются отдельно
+    }));
 
     // Формируем структуру данных аналогичную JSON
     return {
-      tables: tablesWithData,
+      tables: tablesMetadata,
       globalCommissions,
       globalItemChanges,
       xmlLastUpdate: {
@@ -587,6 +607,7 @@ module.exports = {
   // Tables
   getAllTables,
   getTableById,
+  getTableData,
   createTable,
   deleteTable,
   // Table Items
