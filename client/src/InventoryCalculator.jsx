@@ -7878,7 +7878,29 @@ const InventoryCalculator = () => {
               )}
 
             {/* Таблица */}
-            {renderTable(paginatedData, startIndex)}
+            {tableDataLoadingStatus[activeTableId] === 'loading' ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '60px 20px',
+                fontSize: '18px',
+                color: '#666'
+              }}>
+                <div style={{
+                  fontSize: '48px',
+                  marginBottom: '20px',
+                  animation: 'spin 1s linear infinite'
+                }}>⏳</div>
+                <div>Загрузка данных таблицы...</div>
+                <div style={{ fontSize: '14px', marginTop: '10px', color: '#999' }}>
+                  Это может занять несколько секунд для больших таблиц
+                </div>
+              </div>
+            ) : (
+              renderTable(paginatedData, startIndex)
+            )}
 
             {/* Дублированная пагинация внизу */}
             {totalPages > 1 &&
