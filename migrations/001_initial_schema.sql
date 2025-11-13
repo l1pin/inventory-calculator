@@ -39,7 +39,7 @@ CREATE TABLE table_items (
   item_id TEXT NOT NULL,
   base_cost DECIMAL(10, 2),
   total_cost DECIMAL(10, 2),
-  commission INTEGER,
+  commission DECIMAL(10, 2),
   stock INTEGER DEFAULT 0,
   days_stock INTEGER DEFAULT 0,
   sales_month INTEGER DEFAULT 0,
