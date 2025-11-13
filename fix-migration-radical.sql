@@ -30,8 +30,8 @@ CREATE TABLE table_items (
   UNIQUE(table_id, item_id)
 );
 
-CREATE INDEX idx_table_items_table_id ON table_items(table_id);
-CREATE INDEX idx_table_items_item_id ON table_items(item_id);
+CREATE INDEX IF NOT EXISTS idx_table_items_table_id ON table_items(table_id);
+CREATE INDEX IF NOT EXISTS idx_table_items_item_id ON table_items(item_id);
 
 DO $$
 BEGIN
