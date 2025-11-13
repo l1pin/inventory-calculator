@@ -1,6 +1,8 @@
 // Netlify Function для API
 // Обрабатывает все запросы к /api/*
 
+const fetch = require('node-fetch');
+
 const {
   getAllAppData,
   saveAllAppData,
@@ -232,9 +234,11 @@ exports.handler = async (event, context) => {
       console.log(`📥 Загрузка XML через proxy: ${targetUrl}`);
 
       try {
-        // Используем node-fetch для запроса (в окружении Netlify Functions)
-        const fetchModule = await import('node-fetch');
-        const fetch = fetchModule.default;
+        // Создаем AbortController для таймаута
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+          controller.abort();
+        }, 30000); // 30 секунд
 
         const response = await fetch(targetUrl, {
           method: 'GET',
@@ -242,11 +246,13 @@ exports.handler = async (event, context) => {
             'Accept': 'application/xml, text/xml, */*',
             'User-Agent': 'Mozilla/5.0 (compatible; InventoryCalculator/1.0)'
           },
-          timeout: 30000
+          signal: controller.signal
         });
 
+        clearTimeout(timeout);
+
         if (!response.ok) {
-          console.error(`❌ Ошибка загрузки XML: ${response.status}`);
+          console.error(`❌ Ошибка загрузки XML: ${response.status} ${response.statusText}`);
           return {
             statusCode: response.status,
             headers: {
@@ -254,7 +260,8 @@ exports.handler = async (event, context) => {
               'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({
-              error: `Failed to fetch XML: ${response.statusText}`
+              error: `Failed to fetch XML: ${response.statusText}`,
+              status: response.status
             })
           };
         }
@@ -274,9 +281,14 @@ exports.handler = async (event, context) => {
 
       } catch (fetchError) {
         console.error('❌ Ошибка fetch XML:', fetchError);
-        return createResponse(500, {
-          error: 'Failed to fetch XML',
-          message: fetchError.message
+
+        // Проверяем, был ли таймаут
+        const isTimeout = fetchError.name === 'AbortError';
+
+        return createResponse(isTimeout ? 504 : 502, {
+          error: isTimeout ? 'Request timeout' : 'Failed to fetch XML',
+          message: fetchError.message,
+          type: fetchError.name
         });
       }
     }
