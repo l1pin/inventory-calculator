@@ -1528,60 +1528,27 @@ const InventoryCalculator = () => {
 
   const fetchWithCorsHandling = async (url, description) => {
     try {
-      const response = await fetch(url, {
+      // Используем Netlify Functions proxy для обхода CORS
+      const proxyUrl = `/api/fetch-xml?url=${encodeURIComponent(url)}`;
+      console.log(`📥 Загрузка ${description} через proxy`);
+
+      const response = await fetch(proxyUrl, {
         method: "GET",
-        mode: "cors",
         headers: {
           Accept: "application/xml, text/xml, */*",
-          "Content-Type": "application/xml",
         },
       });
-      if (!response.ok)
+
+      if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.text();
-    } catch (directError) {
-      for (let i = 0; i < CORS_PROXIES.length; i++) {
-        const proxy = CORS_PROXIES[i];
-        try {
-          let proxyUrl,
-            parseResponse = (response) => response.text();
-
-          if (proxy.includes("allorigins.win")) {
-            proxyUrl = `${proxy}${encodeURIComponent(url)}`;
-            parseResponse = async (response) => {
-              const json = await response.json();
-              if (json.status && json.status.http_code === 200)
-                return json.contents;
-              throw new Error(
-                `AllOrigins proxy error: ${
-                  json.status ? json.status.http_code : "unknown"
-                }`
-              );
-            };
-          } else if (proxy.includes("codetabs.com")) {
-            proxyUrl = `${proxy}${encodeURIComponent(url)}`;
-          } else {
-            proxyUrl = `${proxy}${url}`;
-          }
-
-          const response = await fetch(proxyUrl, {
-            method: "GET",
-            headers: {
-              Accept:
-                "application/json, application/xml, text/xml, text/plain, */*",
-            },
-          });
-          if (!response.ok)
-            throw new Error(`Proxy HTTP error! status: ${response.status}`);
-          return await parseResponse(response);
-        } catch (proxyError) {
-          if (i === CORS_PROXIES.length - 1)
-            console.error(`Все прокси не удались для ${description}`);
-        }
       }
-      throw new Error(
-        `Не удалось загрузить ${description}. Установите CORS расширение или попробуйте позже.`
-      );
+
+      const xmlText = await response.text();
+      console.log(`✅ ${description} загружены, размер: ${xmlText.length} байт`);
+      return xmlText;
+    } catch (error) {
+      console.error(`❌ Ошибка загрузки ${description}:`, error);
+      throw new Error(`Не удалось загрузить ${description}: ${error.message}`);
     }
   };
 

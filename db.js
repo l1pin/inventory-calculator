@@ -747,7 +747,7 @@ async function saveAllAppData(appData) {
 
     // Сохраняем XML статусы
     const xmlStatus = appData.globalXmlLoadingStatus || { crm: 'not_loaded', prom: 'not_loaded' };
-    await Promise.all([
+    const xmlStatusPromises = [
       saveXmlStatus(
         'global_crm',
         xmlStatus.crm,
@@ -760,8 +760,50 @@ async function saveAllAppData(appData) {
         appData.xmlLastUpdate?.prom || null,
         appData.xmlDataCounts?.prom || 0
       )
-    ]);
+    ];
 
+    // Сохраняем XML статусы для каждой таблицы
+    if (appData.xmlLastUpdate || appData.xmlDataCounts || appData.tableXmlLoadingStatus) {
+      const tableKeys = new Set();
+
+      // Собираем все ключи таблиц из разных источников
+      if (appData.xmlLastUpdate) {
+        Object.keys(appData.xmlLastUpdate).forEach(key => {
+          if (key.startsWith('table_')) tableKeys.add(key.replace('table_', ''));
+        });
+      }
+
+      if (appData.tableXmlLoadingStatus) {
+        Object.keys(appData.tableXmlLoadingStatus).forEach(key => tableKeys.add(key));
+      }
+
+      // Сохраняем статус для каждой таблицы
+      for (const tableId of tableKeys) {
+        const tableKey = `table_${tableId}`;
+        const loadingStatus = appData.tableXmlLoadingStatus?.[tableId] || { crm: 'not_loaded', prom: 'not_loaded' };
+        const lastUpdate = appData.xmlLastUpdate?.[tableKey] || null;
+        const crmCount = appData.xmlDataCounts?.[`${tableKey}_crm`] || 0;
+        const promCount = appData.xmlDataCounts?.[`${tableKey}_prom`] || 0;
+
+        // Определяем общий статус (loaded только если оба loaded)
+        const overallStatus = (loadingStatus.crm === 'loaded' && loadingStatus.prom === 'loaded')
+          ? 'loaded'
+          : (loadingStatus.crm === 'loading' || loadingStatus.prom === 'loading')
+          ? 'loading'
+          : 'not_loaded';
+
+        xmlStatusPromises.push(
+          saveXmlStatus(
+            tableKey,
+            overallStatus,
+            lastUpdate,
+            crmCount + promCount
+          )
+        );
+      }
+    }
+
+    await Promise.all(xmlStatusPromises);
     console.log('✅ Все данные успешно сохранены в БД');
     return true;
   } catch (error) {
