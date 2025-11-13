@@ -631,40 +631,31 @@ async function getAllAppData() {
       getXmlStatus('global_prom')
     ]);
 
-    // Загружаем XML данные для каждой таблицы
-    const tableXmlData = {};
-    const tableXmlLoadingStatus = {};
+    // Загружаем ТОЛЬКО статусы XML для таблиц (быстро, без данных)
+    // Сами XML данные не загружаем - они слишком большие и загружаются только при обновлении
     const xmlLastUpdateTable = {};
     const xmlDataCountsTable = {};
 
-    for (const table of tables) {
-      try {
-        const xmlData = await getTableXmlData(table.id);
-        if (xmlData && (Object.keys(xmlData).length > 0)) {
-          tableXmlData[table.id] = xmlData;
-        }
+    // Параллельная загрузка статусов для всех таблиц (быстро)
+    const statusPromises = tables.map(table =>
+      getXmlStatus(`table_${table.id}`).catch(err => null)
+    );
+    const statuses = await Promise.all(statusPromises);
 
-        const xmlStatus = await getXmlStatus(`table_${table.id}`);
-        if (xmlStatus) {
-          // Восстанавливаем статус загрузки
-          tableXmlLoadingStatus[table.id] = {
-            crm: xmlStatus.status || 'not_loaded',
-            prom: xmlStatus.status || 'not_loaded'
-          };
-          // Восстанавливаем время последнего обновления
-          if (xmlStatus.last_update) {
-            xmlLastUpdateTable[`table_${table.id}`] = xmlStatus.last_update;
-          }
-          // Восстанавливаем счётчики
-          if (xmlStatus.data_count) {
-            xmlDataCountsTable[`table_${table.id}_crm`] = xmlStatus.data_count;
-            xmlDataCountsTable[`table_${table.id}_prom`] = xmlStatus.data_count;
-          }
+    tables.forEach((table, index) => {
+      const xmlStatus = statuses[index];
+      if (xmlStatus) {
+        // Восстанавливаем время последнего обновления
+        if (xmlStatus.last_update) {
+          xmlLastUpdateTable[`table_${table.id}`] = xmlStatus.last_update;
         }
-      } catch (err) {
-        console.log(`⚠️ Не удалось загрузить XML данные для таблицы ${table.id}:`, err.message);
+        // Восстанавливаем счётчики
+        if (xmlStatus.data_count) {
+          xmlDataCountsTable[`table_${table.id}_crm`] = xmlStatus.data_count;
+          xmlDataCountsTable[`table_${table.id}_prom`] = xmlStatus.data_count;
+        }
       }
-    }
+    });
 
     // Возвращаем только метаданные таблиц (БЕЗ data)
     // Данные будут загружаться отдельно через GET /api/tables/:id
@@ -692,8 +683,8 @@ async function getAllAppData() {
         ...xmlDataCountsTable // Добавляем счётчики таблиц
       },
       availableCrmCategories: crmCategories,
-      tableXmlData, // Загруженные XML данные таблиц
-      tableXmlLoadingStatus, // Статусы загрузки таблиц
+      tableXmlData: {}, // XML данные таблиц не загружаем - они в БД и загружаются при обновлении
+      tableXmlLoadingStatus: {}, // Статусы не нужны при старте
       globalCrmData: crmData,
       globalPromData: promData,
       globalXmlLoadingStatus: {
