@@ -869,20 +869,28 @@ const InventoryCalculator = () => {
         });
       }
 
-      // Сохраняем только метаданные таблиц (без data), так как данные хранятся в БД
-      const tablesMetadata = Array.isArray(tables)
-        ? tables.map(table => ({
-            id: table.id,
-            name: table.name,
-            fileName: table.fileName,
-            uploadTime: table.uploadTime,
-            filters: table.filters,
-            data: [] // Не сохраняем данные - они в БД
-          }))
+      // Сохраняем данные только для активной таблицы (оптимизация размера запроса)
+      // Это позволяет сохранять изменения (цены, комментарии) при автосохранении
+      // без превышения лимитов размера запроса
+      const tablesToSave = Array.isArray(tables)
+        ? tables.map(table => {
+            // Отправляем данные только для активной таблицы
+            const isActiveTable = table.id === activeTableId;
+            const shouldSaveData = isActiveTable && table.data && table.data.length > 0;
+
+            return {
+              id: table.id,
+              name: table.name,
+              fileName: table.fileName,
+              uploadTime: table.uploadTime,
+              filters: table.filters,
+              data: shouldSaveData ? table.data : []
+            };
+          })
         : [];
 
       const dataToSave = {
-        tables: tablesMetadata,
+        tables: tablesToSave,
         globalCommissions: globalCommissions || {},
         globalItemChanges: globalItemChanges || {},
         xmlLastUpdate: xmlLastUpdate || {},
