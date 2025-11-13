@@ -82,17 +82,36 @@ async function deleteTable(tableId) {
 // ============================================================================
 
 /**
- * Получить все товары таблицы
+ * Получить все товары таблицы (с пагинацией для больших таблиц)
  */
 async function getTableItems(tableId) {
-  const { data, error } = await supabase
-    .from('table_items')
-    .select('*')
-    .eq('table_id', tableId)
-    .order('item_id', { ascending: true });
+  const pageSize = 1000;
+  let allData = [];
+  let page = 0;
+  let hasMore = true;
 
-  if (error) throw error;
-  return data;
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('table_items')
+      .select('*')
+      .eq('table_id', tableId)
+      .order('item_id', { ascending: true })
+      .range(from, to);
+
+    if (error) throw error;
+
+    allData = allData.concat(data);
+
+    // Если получили меньше pageSize записей, значит это последняя страница
+    hasMore = data.length === pageSize;
+    page++;
+  }
+
+  console.log(`📦 Загружено ${allData.length} товаров для таблицы ${tableId}`);
+  return allData;
 }
 
 /**
@@ -164,16 +183,32 @@ async function getCrmCategories() {
 }
 
 /**
- * Получить товары по типу категории
+ * Получить товары по типу категории (с пагинацией)
  */
 async function getItemsByCategory(categoryType) {
-  const { data, error } = await supabase
-    .from('item_categories')
-    .select('item_id')
-    .eq('category_type', categoryType);
+  const pageSize = 1000;
+  let allData = [];
+  let page = 0;
+  let hasMore = true;
 
-  if (error) throw error;
-  return data.map(item => item.item_id);
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('item_categories')
+      .select('item_id')
+      .eq('category_type', categoryType)
+      .range(from, to);
+
+    if (error) throw error;
+
+    allData = allData.concat(data);
+    hasMore = data.length === pageSize;
+    page++;
+  }
+
+  return allData.map(item => item.item_id);
 }
 
 /**
@@ -247,18 +282,33 @@ async function removeItemFromCategory(categoryType, itemId) {
 // ============================================================================
 
 /**
- * Получить все глобальные комиссии
+ * Получить все глобальные комиссии (с пагинацией)
  */
 async function getGlobalCommissions() {
-  const { data, error } = await supabase
-    .from('global_commissions')
-    .select('*');
+  const pageSize = 1000;
+  let allData = [];
+  let page = 0;
+  let hasMore = true;
 
-  if (error) throw error;
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('global_commissions')
+      .select('*')
+      .range(from, to);
+
+    if (error) throw error;
+
+    allData = allData.concat(data);
+    hasMore = data.length === pageSize;
+    page++;
+  }
 
   // Преобразуем в объект {key: value}
   const commissions = {};
-  data.forEach(item => {
+  allData.forEach(item => {
     commissions[item.key] = parseFloat(item.value);
   });
 
@@ -288,18 +338,33 @@ async function saveGlobalCommissions(commissions) {
 // ============================================================================
 
 /**
- * Получить все глобальные изменения товаров
+ * Получить все глобальные изменения товаров (с пагинацией)
  */
 async function getGlobalItemChanges() {
-  const { data, error } = await supabase
-    .from('global_item_changes')
-    .select('*');
+  const pageSize = 1000;
+  let allData = [];
+  let page = 0;
+  let hasMore = true;
 
-  if (error) throw error;
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('global_item_changes')
+      .select('*')
+      .range(from, to);
+
+    if (error) throw error;
+
+    allData = allData.concat(data);
+    hasMore = data.length === pageSize;
+    page++;
+  }
 
   // Преобразуем в объект {itemId: changes}
   const itemChanges = {};
-  data.forEach(item => {
+  allData.forEach(item => {
     itemChanges[item.item_id] = item.changes;
   });
 
