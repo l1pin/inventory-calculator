@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: inventory-calculator
+    env: node
+    buildCommand: npm run install:all && npm run build:client
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
