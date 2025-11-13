@@ -1,13 +1,21 @@
-# Исправление ошибки миграции item_id
+# Исправление ошибок миграции
 
-## Проблема
+## Проблемы
 
-При запуске `node migrate-data.js` возникла ошибка:
+При запуске `node migrate-data.js` возникали ошибки:
+
+### Ошибка 1: item_id
 ```
 invalid input syntax for type integer: "c26cdac3-8249-11f0-9bae-b894ff1469bf#f2d8c768-8249-11f0-9bae-b894ff1469bf"
 ```
-
 **Причина:** В схеме БД поле `item_id` было определено как `INTEGER`, но в ваших данных есть строковые ID (UUID, коды типа "KA00439-2").
+
+### Ошибка 2: commission
+```
+invalid input syntax for type integer: "10.8"
+invalid input syntax for type integer: "14.000000000000002"
+```
+**Причина:** В схеме БД поле `commission` было определено как `INTEGER`, но в ваших данных есть дробные значения комиссий.
 
 ## Решение
 
@@ -60,21 +68,31 @@ node migrate-data.js
 
 ## Что было исправлено
 
-### В файле `migrations/001_initial_schema.sql` (строка 39):
+### В файле `migrations/001_initial_schema.sql`:
 
+#### Исправление 1: item_id (строка 39)
 **Было:**
 ```sql
 item_id INTEGER NOT NULL,
 ```
-
 **Стало:**
 ```sql
 item_id TEXT NOT NULL,
 ```
 
-### Создан новый файл `migrations/002_fix_item_id_type.sql`
+#### Исправление 2: commission (строка 42)
+**Было:**
+```sql
+commission INTEGER,
+```
+**Стало:**
+```sql
+commission DECIMAL(10, 2),
+```
 
-Скрипт для исправления уже существующей БД.
+### Обновлен файл `migrations/002_fix_item_id_type.sql`
+
+Скрипт для исправления уже существующей БД (исправляет оба поля).
 
 ---
 
