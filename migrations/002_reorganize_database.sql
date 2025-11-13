@@ -294,6 +294,7 @@ ORDER BY table_id, item_id, updated_at DESC
 ON CONFLICT (table_id, item_id) DO NOTHING;
 
 -- Мигрируем историю цен из JSONB в price_changes
+-- ВАЖНО: Только для товаров, которые существуют в items!
 INSERT INTO price_changes (item_id, old_price, new_price, changed_at, is_latest)
 SELECT
   ti.item_id,
@@ -311,7 +312,8 @@ FROM table_items ti,
   ) AS history_entry
 WHERE ti.price_history IS NOT NULL
   AND jsonb_typeof(ti.price_history) = 'array'
-  AND jsonb_array_length(ti.price_history) > 0;
+  AND jsonb_array_length(ti.price_history) > 0
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ti.item_id);
 
 -- Обновляем is_latest для последних изменений цен
 WITH latest_prices AS (
@@ -326,6 +328,7 @@ FROM latest_prices lp
 WHERE pc.id = lp.id;
 
 -- Мигрируем комментарии из JSONB в item_comments
+-- ВАЖНО: Только для товаров, которые существуют в items!
 INSERT INTO item_comments (item_id, comment, created_at)
 SELECT
   ti.item_id,
@@ -345,43 +348,51 @@ FROM table_items ti,
 WHERE ti.comments IS NOT NULL
   AND jsonb_typeof(ti.comments) = 'array'
   AND jsonb_array_length(ti.comments) > 0
-  AND comment_entry->>'text' IS NOT NULL;
+  AND comment_entry->>'text' IS NOT NULL
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ti.item_id);
 
 -- Мигрируем категории из item_categories в новые таблицы
+-- ВАЖНО: Мигрируем только те товары, которые существуют в items!
 INSERT INTO category_new (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'new'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'new'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO category_optimization (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'optimization'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'optimization'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO category_ab (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'ab'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'ab'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO category_c_sale (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'c_sale'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'c_sale'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO category_off_season (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'off_season'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'off_season'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO category_unprofitable (item_id, added_at)
-SELECT item_id, created_at
-FROM item_categories
-WHERE category_type = 'unprofitable'
+SELECT ic.item_id, ic.created_at
+FROM item_categories ic
+WHERE ic.category_type = 'unprofitable'
+  AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ic.item_id)
 ON CONFLICT (item_id) DO NOTHING;
 
 -- ============================================================================
