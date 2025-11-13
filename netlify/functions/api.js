@@ -220,6 +220,68 @@ exports.handler = async (event, context) => {
     }
 
     // ============================================================================
+    // GET /api/fetch-xml - Proxy для загрузки XML (обход CORS)
+    // ============================================================================
+    if (httpMethod === 'GET' && apiPath === '/fetch-xml') {
+      const targetUrl = event.queryStringParameters?.url;
+
+      if (!targetUrl) {
+        return createResponse(400, { error: 'Missing url parameter' });
+      }
+
+      console.log(`📥 Загрузка XML через proxy: ${targetUrl}`);
+
+      try {
+        // Используем node-fetch для запроса (в окружении Netlify Functions)
+        const fetchModule = await import('node-fetch');
+        const fetch = fetchModule.default;
+
+        const response = await fetch(targetUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/xml, text/xml, */*',
+            'User-Agent': 'Mozilla/5.0 (compatible; InventoryCalculator/1.0)'
+          },
+          timeout: 30000
+        });
+
+        if (!response.ok) {
+          console.error(`❌ Ошибка загрузки XML: ${response.status}`);
+          return {
+            statusCode: response.status,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+              error: `Failed to fetch XML: ${response.statusText}`
+            })
+          };
+        }
+
+        const xmlText = await response.text();
+        console.log(`✅ XML загружен, размер: ${xmlText.length} байт`);
+
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/xml',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
+          body: xmlText
+        };
+
+      } catch (fetchError) {
+        console.error('❌ Ошибка fetch XML:', fetchError);
+        return createResponse(500, {
+          error: 'Failed to fetch XML',
+          message: fetchError.message
+        });
+      }
+    }
+
+    // ============================================================================
     // 404 - Endpoint не найден
     // ============================================================================
     return createResponse(404, {
