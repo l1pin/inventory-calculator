@@ -82,32 +82,50 @@ async function deleteTable(tableId) {
 // ============================================================================
 
 /**
- * Получить все товары таблицы (с пагинацией для больших таблиц)
+ * Получить все товары таблицы (с параллельной пагинацией для больших таблиц)
  */
 async function getTableItems(tableId) {
-  const pageSize = 1000;
-  let allData = [];
-  let page = 0;
-  let hasMore = true;
+  // Сначала получаем общее количество записей
+  const { count, error: countError } = await supabase
+    .from('table_items')
+    .select('*', { count: 'exact', head: true })
+    .eq('table_id', tableId);
 
-  while (hasMore) {
+  if (countError) throw countError;
+
+  if (count === 0) {
+    return [];
+  }
+
+  console.log(`📊 Таблица ${tableId}: найдено ${count} записей`);
+
+  // Определяем размер страницы и количество страниц
+  const pageSize = 1000;
+  const totalPages = Math.ceil(count / pageSize);
+
+  // Создаем массив промисов для параллельной загрузки всех страниц
+  const pagePromises = [];
+  for (let page = 0; page < totalPages; page++) {
     const from = page * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
+    const promise = supabase
       .from('table_items')
       .select('*')
       .eq('table_id', tableId)
-      .order('item_id', { ascending: true })
       .range(from, to);
 
-    if (error) throw error;
+    pagePromises.push(promise);
+  }
 
-    allData = allData.concat(data);
+  // Загружаем все страницы параллельно
+  const results = await Promise.all(pagePromises);
 
-    // Если получили меньше pageSize записей, значит это последняя страница
-    hasMore = data.length === pageSize;
-    page++;
+  // Проверяем ошибки и собираем данные
+  let allData = [];
+  for (const result of results) {
+    if (result.error) throw result.error;
+    allData = allData.concat(result.data);
   }
 
   console.log(`📦 Загружено ${allData.length} товаров для таблицы ${tableId}`);
@@ -183,29 +201,41 @@ async function getCrmCategories() {
 }
 
 /**
- * Получить товары по типу категории (с пагинацией)
+ * Получить товары по типу категории (с параллельной пагинацией)
  */
 async function getItemsByCategory(categoryType) {
-  const pageSize = 1000;
-  let allData = [];
-  let page = 0;
-  let hasMore = true;
+  // Получаем общее количество
+  const { count, error: countError } = await supabase
+    .from('item_categories')
+    .select('*', { count: 'exact', head: true })
+    .eq('category_type', categoryType);
 
-  while (hasMore) {
+  if (countError) throw countError;
+  if (count === 0) return [];
+
+  const pageSize = 1000;
+  const totalPages = Math.ceil(count / pageSize);
+
+  // Параллельная загрузка всех страниц
+  const pagePromises = [];
+  for (let page = 0; page < totalPages; page++) {
     const from = page * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
-      .from('item_categories')
-      .select('item_id')
-      .eq('category_type', categoryType)
-      .range(from, to);
+    pagePromises.push(
+      supabase
+        .from('item_categories')
+        .select('item_id')
+        .eq('category_type', categoryType)
+        .range(from, to)
+    );
+  }
 
-    if (error) throw error;
-
-    allData = allData.concat(data);
-    hasMore = data.length === pageSize;
-    page++;
+  const results = await Promise.all(pagePromises);
+  let allData = [];
+  for (const result of results) {
+    if (result.error) throw result.error;
+    allData = allData.concat(result.data);
   }
 
   return allData.map(item => item.item_id);
@@ -282,28 +312,39 @@ async function removeItemFromCategory(categoryType, itemId) {
 // ============================================================================
 
 /**
- * Получить все глобальные комиссии (с пагинацией)
+ * Получить все глобальные комиссии (с параллельной пагинацией)
  */
 async function getGlobalCommissions() {
-  const pageSize = 1000;
-  let allData = [];
-  let page = 0;
-  let hasMore = true;
+  // Получаем общее количество
+  const { count, error: countError } = await supabase
+    .from('global_commissions')
+    .select('*', { count: 'exact', head: true });
 
-  while (hasMore) {
+  if (countError) throw countError;
+  if (count === 0) return {};
+
+  const pageSize = 1000;
+  const totalPages = Math.ceil(count / pageSize);
+
+  // Параллельная загрузка всех страниц
+  const pagePromises = [];
+  for (let page = 0; page < totalPages; page++) {
     const from = page * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
-      .from('global_commissions')
-      .select('*')
-      .range(from, to);
+    pagePromises.push(
+      supabase
+        .from('global_commissions')
+        .select('*')
+        .range(from, to)
+    );
+  }
 
-    if (error) throw error;
-
-    allData = allData.concat(data);
-    hasMore = data.length === pageSize;
-    page++;
+  const results = await Promise.all(pagePromises);
+  let allData = [];
+  for (const result of results) {
+    if (result.error) throw result.error;
+    allData = allData.concat(result.data);
   }
 
   // Преобразуем в объект {key: value}
@@ -338,28 +379,39 @@ async function saveGlobalCommissions(commissions) {
 // ============================================================================
 
 /**
- * Получить все глобальные изменения товаров (с пагинацией)
+ * Получить все глобальные изменения товаров (с параллельной пагинацией)
  */
 async function getGlobalItemChanges() {
-  const pageSize = 1000;
-  let allData = [];
-  let page = 0;
-  let hasMore = true;
+  // Получаем общее количество
+  const { count, error: countError } = await supabase
+    .from('global_item_changes')
+    .select('*', { count: 'exact', head: true });
 
-  while (hasMore) {
+  if (countError) throw countError;
+  if (count === 0) return {};
+
+  const pageSize = 1000;
+  const totalPages = Math.ceil(count / pageSize);
+
+  // Параллельная загрузка всех страниц
+  const pagePromises = [];
+  for (let page = 0; page < totalPages; page++) {
     const from = page * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
-      .from('global_item_changes')
-      .select('*')
-      .range(from, to);
+    pagePromises.push(
+      supabase
+        .from('global_item_changes')
+        .select('*')
+        .range(from, to)
+    );
+  }
 
-    if (error) throw error;
-
-    allData = allData.concat(data);
-    hasMore = data.length === pageSize;
-    page++;
+  const results = await Promise.all(pagePromises);
+  let allData = [];
+  for (const result of results) {
+    if (result.error) throw result.error;
+    allData = allData.concat(result.data);
   }
 
   // Преобразуем в объект {itemId: changes}
