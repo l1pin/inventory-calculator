@@ -81,9 +81,9 @@ CREATE TABLE IF NOT EXISTS price_changes (
   is_latest BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX idx_price_changes_item_id ON price_changes(item_id);
-CREATE INDEX idx_price_changes_changed_at ON price_changes(changed_at DESC);
-CREATE INDEX idx_price_changes_latest ON price_changes(item_id, is_latest) WHERE is_latest = TRUE;
+CREATE INDEX IF NOT EXISTS idx_price_changes_item_id ON price_changes(item_id);
+CREATE INDEX IF NOT EXISTS idx_price_changes_changed_at ON price_changes(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_price_changes_latest ON price_changes(item_id, is_latest) WHERE is_latest = TRUE;
 
 COMMENT ON TABLE price_changes IS 'История изменения цен товаров';
 COMMENT ON COLUMN price_changes.is_latest IS 'Флаг последнего изменения цены для товара';
@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS item_comments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_item_comments_item_id ON item_comments(item_id);
-CREATE INDEX idx_item_comments_created_at ON item_comments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_item_comments_item_id ON item_comments(item_id);
+CREATE INDEX IF NOT EXISTS idx_item_comments_created_at ON item_comments(created_at DESC);
 
 COMMENT ON TABLE item_comments IS 'Комментарии к товарам';
 
@@ -119,8 +119,8 @@ CREATE TABLE IF NOT EXISTS category_new (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_new_item_id ON category_new(item_id);
-CREATE INDEX idx_category_new_added_at ON category_new(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_new_item_id ON category_new(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_new_added_at ON category_new(added_at DESC);
 
 COMMENT ON TABLE category_new IS 'Категория: Новый товар';
 
@@ -134,8 +134,8 @@ CREATE TABLE IF NOT EXISTS category_optimization (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_optimization_item_id ON category_optimization(item_id);
-CREATE INDEX idx_category_optimization_added_at ON category_optimization(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_optimization_item_id ON category_optimization(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_optimization_added_at ON category_optimization(added_at DESC);
 
 COMMENT ON TABLE category_optimization IS 'Категория: Оптимизация';
 
@@ -151,9 +151,9 @@ CREATE TABLE IF NOT EXISTS category_ab (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_ab_item_id ON category_ab(item_id);
-CREATE INDEX idx_category_ab_added_at ON category_ab(added_at DESC);
-CREATE INDEX idx_category_ab_variant ON category_ab(variant);
+CREATE INDEX IF NOT EXISTS idx_category_ab_item_id ON category_ab(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_ab_added_at ON category_ab(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_ab_variant ON category_ab(variant);
 
 COMMENT ON TABLE category_ab IS 'Категория: A/B тестирование';
 
@@ -169,8 +169,8 @@ CREATE TABLE IF NOT EXISTS category_c_sale (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_c_sale_item_id ON category_c_sale(item_id);
-CREATE INDEX idx_category_c_sale_added_at ON category_c_sale(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_c_sale_item_id ON category_c_sale(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_c_sale_added_at ON category_c_sale(added_at DESC);
 
 COMMENT ON TABLE category_c_sale IS 'Категория: С-Продажа';
 
@@ -185,9 +185,9 @@ CREATE TABLE IF NOT EXISTS category_off_season (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_off_season_item_id ON category_off_season(item_id);
-CREATE INDEX idx_category_off_season_added_at ON category_off_season(added_at DESC);
-CREATE INDEX idx_category_off_season_season ON category_off_season(season);
+CREATE INDEX IF NOT EXISTS idx_category_off_season_item_id ON category_off_season(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_off_season_added_at ON category_off_season(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_off_season_season ON category_off_season(season);
 
 COMMENT ON TABLE category_off_season IS 'Категория: Несезон';
 
@@ -202,8 +202,8 @@ CREATE TABLE IF NOT EXISTS category_unprofitable (
   UNIQUE(item_id)
 );
 
-CREATE INDEX idx_category_unprofitable_item_id ON category_unprofitable(item_id);
-CREATE INDEX idx_category_unprofitable_added_at ON category_unprofitable(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_category_unprofitable_item_id ON category_unprofitable(item_id);
+CREATE INDEX IF NOT EXISTS idx_category_unprofitable_added_at ON category_unprofitable(added_at DESC);
 
 COMMENT ON TABLE category_unprofitable IS 'Категория: Нерентабельные';
 
@@ -225,8 +225,8 @@ CREATE TABLE IF NOT EXISTS table_items_new (
   UNIQUE(table_id, item_id)
 );
 
-CREATE INDEX idx_table_items_new_table_id ON table_items_new(table_id);
-CREATE INDEX idx_table_items_new_item_id ON table_items_new(item_id);
+CREATE INDEX IF NOT EXISTS idx_table_items_new_table_id ON table_items_new(table_id);
+CREATE INDEX IF NOT EXISTS idx_table_items_new_item_id ON table_items_new(item_id);
 
 COMMENT ON TABLE table_items_new IS 'Связь между таблицами и товарами (без дублирования данных)';
 
@@ -399,27 +399,51 @@ ON CONFLICT (item_id) DO NOTHING;
 -- Step 7: Replace old tables with new structure
 -- ============================================================================
 
--- Переименовываем старые таблицы для backup
-ALTER TABLE table_items RENAME TO table_items_old_backup;
-ALTER TABLE item_categories RENAME TO item_categories_old_backup;
+-- Переименовываем старые таблицы для backup (если еще не переименованы)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'table_items' AND schemaname = 'public') THEN
+    ALTER TABLE table_items RENAME TO table_items_old_backup;
+  END IF;
 
--- Переименовываем новую таблицу
-ALTER TABLE table_items_new RENAME TO table_items;
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'item_categories' AND schemaname = 'public') THEN
+    ALTER TABLE item_categories RENAME TO item_categories_old_backup;
+  END IF;
+END $$;
 
--- Переименовываем индексы
-ALTER INDEX idx_table_items_new_table_id RENAME TO idx_table_items_table_id;
-ALTER INDEX idx_table_items_new_item_id RENAME TO idx_table_items_item_id;
+-- Переименовываем новую таблицу (если еще не переименована)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'table_items_new' AND schemaname = 'public') THEN
+    ALTER TABLE table_items_new RENAME TO table_items;
+  END IF;
+END $$;
+
+-- Переименовываем индексы (если еще не переименованы)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_table_id' AND schemaname = 'public') THEN
+    ALTER INDEX idx_table_items_new_table_id RENAME TO idx_table_items_table_id;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_table_items_new_item_id' AND schemaname = 'public') THEN
+    ALTER INDEX idx_table_items_new_item_id RENAME TO idx_table_items_item_id;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- Step 8: Create triggers for automatic timestamp updates
 -- ============================================================================
 
+DROP TRIGGER IF EXISTS update_items_updated_at ON items;
 CREATE TRIGGER update_items_updated_at BEFORE UPDATE ON items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_table_items_updated_at ON table_items;
 CREATE TRIGGER update_table_items_updated_at BEFORE UPDATE ON table_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_item_comments_updated_at ON item_comments;
 CREATE TRIGGER update_item_comments_updated_at BEFORE UPDATE ON item_comments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -516,7 +540,7 @@ LEFT JOIN category_c_sale ccs ON i.item_id = ccs.item_id
 LEFT JOIN category_off_season cof ON i.item_id = cof.item_id
 LEFT JOIN category_unprofitable cup ON i.item_id = cup.item_id;
 
-CREATE UNIQUE INDEX idx_item_categories_view_item_id ON item_categories_view(item_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_item_categories_view_item_id ON item_categories_view(item_id);
 
 COMMENT ON MATERIALIZED VIEW item_categories_view IS 'Быстрый lookup категорий товаров';
 
