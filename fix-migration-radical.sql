@@ -8,11 +8,14 @@
 -- ШАГ 1: Полная очистка
 -- ============================================================================
 
--- Удаляем все связанные таблицы и индексы
-DROP TABLE IF EXISTS table_items CASCADE;
-DROP TABLE IF EXISTS table_items_new CASCADE;
+DO $$
+BEGIN
+  -- Удаляем все связанные таблицы и индексы
+  DROP TABLE IF EXISTS table_items CASCADE;
+  DROP TABLE IF EXISTS table_items_new CASCADE;
 
-RAISE NOTICE '✅ Старые table_items удалены';
+  RAISE NOTICE '✅ Старые table_items удалены';
+END $$;
 
 -- ============================================================================
 -- ШАГ 2: Создаем правильную table_items
@@ -30,7 +33,10 @@ CREATE TABLE table_items (
 CREATE INDEX idx_table_items_table_id ON table_items(table_id);
 CREATE INDEX idx_table_items_item_id ON table_items(item_id);
 
-RAISE NOTICE '✅ Создана новая table_items';
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Создана новая table_items';
+END $$;
 
 -- ============================================================================
 -- ШАГ 3: Заполняем table_items из старого backup
@@ -65,15 +71,18 @@ END $$;
 -- ШАГ 4: Очищаем и перезаполняем категории
 -- ============================================================================
 
--- Очищаем все категории
-TRUNCATE TABLE category_new CASCADE;
-TRUNCATE TABLE category_optimization CASCADE;
-TRUNCATE TABLE category_ab CASCADE;
-TRUNCATE TABLE category_c_sale CASCADE;
-TRUNCATE TABLE category_off_season CASCADE;
-TRUNCATE TABLE category_unprofitable CASCADE;
+DO $$
+BEGIN
+  -- Очищаем все категории
+  TRUNCATE TABLE category_new CASCADE;
+  TRUNCATE TABLE category_optimization CASCADE;
+  TRUNCATE TABLE category_ab CASCADE;
+  TRUNCATE TABLE category_c_sale CASCADE;
+  TRUNCATE TABLE category_off_season CASCADE;
+  TRUNCATE TABLE category_unprofitable CASCADE;
 
-RAISE NOTICE '✅ Категории очищены';
+  RAISE NOTICE '✅ Категории очищены';
+END $$;
 
 -- Ищем исходную таблицу категорий
 DO $$
@@ -172,7 +181,13 @@ END $$;
 -- ШАГ 5: Обновляем триггеры
 -- ============================================================================
 
-DROP TRIGGER IF EXISTS update_table_items_updated_at ON table_items;
+DO $$
+BEGIN
+  DROP TRIGGER IF EXISTS update_table_items_updated_at ON table_items;
+
+  RAISE NOTICE '✅ Создаем триггер для table_items';
+END $$;
+
 CREATE TRIGGER update_table_items_updated_at BEFORE UPDATE ON table_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -180,7 +195,12 @@ CREATE TRIGGER update_table_items_updated_at BEFORE UPDATE ON table_items
 -- ШАГ 6: Обновляем materialized view
 -- ============================================================================
 
-REFRESH MATERIALIZED VIEW CONCURRENTLY item_categories_view;
+DO $$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY item_categories_view;
+
+  RAISE NOTICE '✅ Materialized view обновлен';
+END $$;
 
 -- ============================================================================
 -- ШАГ 7: Финальная проверка и статистика
