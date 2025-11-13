@@ -631,6 +631,41 @@ async function getAllAppData() {
       getXmlStatus('global_prom')
     ]);
 
+    // Загружаем XML данные для каждой таблицы
+    const tableXmlData = {};
+    const tableXmlLoadingStatus = {};
+    const xmlLastUpdateTable = {};
+    const xmlDataCountsTable = {};
+
+    for (const table of tables) {
+      try {
+        const xmlData = await getTableXmlData(table.id);
+        if (xmlData && (Object.keys(xmlData).length > 0)) {
+          tableXmlData[table.id] = xmlData;
+        }
+
+        const xmlStatus = await getXmlStatus(`table_${table.id}`);
+        if (xmlStatus) {
+          // Восстанавливаем статус загрузки
+          tableXmlLoadingStatus[table.id] = {
+            crm: xmlStatus.status || 'not_loaded',
+            prom: xmlStatus.status || 'not_loaded'
+          };
+          // Восстанавливаем время последнего обновления
+          if (xmlStatus.last_update) {
+            xmlLastUpdateTable[`table_${table.id}`] = xmlStatus.last_update;
+          }
+          // Восстанавливаем счётчики
+          if (xmlStatus.data_count) {
+            xmlDataCountsTable[`table_${table.id}_crm`] = xmlStatus.data_count;
+            xmlDataCountsTable[`table_${table.id}_prom`] = xmlStatus.data_count;
+          }
+        }
+      } catch (err) {
+        console.log(`⚠️ Не удалось загрузить XML данные для таблицы ${table.id}:`, err.message);
+      }
+    }
+
     // Возвращаем только метаданные таблиц (БЕЗ data)
     // Данные будут загружаться отдельно через GET /api/tables/:id
     const tablesMetadata = tables.map(table => ({
@@ -648,15 +683,17 @@ async function getAllAppData() {
       globalItemChanges,
       xmlLastUpdate: {
         crm: xmlStatusCrm?.last_update || null,
-        prom: xmlStatusProm?.last_update || null
+        prom: xmlStatusProm?.last_update || null,
+        ...xmlLastUpdateTable // Добавляем данные таблиц
       },
       xmlDataCounts: {
         crm: xmlStatusCrm?.data_count || 0,
-        prom: xmlStatusProm?.data_count || 0
+        prom: xmlStatusProm?.data_count || 0,
+        ...xmlDataCountsTable // Добавляем счётчики таблиц
       },
       availableCrmCategories: crmCategories,
-      tableXmlData: {},
-      tableXmlLoadingStatus: {},
+      tableXmlData, // Загруженные XML данные таблиц
+      tableXmlLoadingStatus, // Статусы загрузки таблиц
       globalCrmData: crmData,
       globalPromData: promData,
       globalXmlLoadingStatus: {
@@ -737,12 +774,29 @@ async function saveAllAppData(appData) {
       }
     }
 
-    // Сохраняем XML данные
+    // Сохраняем глобальные XML данные
     if (appData.globalCrmData && Object.keys(appData.globalCrmData).length > 0) {
       await saveGlobalXmlData('crm', appData.globalCrmData);
     }
     if (appData.globalPromData && Object.keys(appData.globalPromData).length > 0) {
       await saveGlobalXmlData('prom', appData.globalPromData);
+    }
+
+    // Сохраняем XML данные для каждой таблицы
+    if (appData.tableXmlData && typeof appData.tableXmlData === 'object') {
+      const tableXmlPromises = [];
+      for (const [tableId, xmlData] of Object.entries(appData.tableXmlData)) {
+        if (xmlData && (xmlData.crm || xmlData.prom)) {
+          const loadingStatus = appData.tableXmlLoadingStatus?.[tableId] || { crm: 'not_loaded', prom: 'not_loaded' };
+          tableXmlPromises.push(
+            saveTableXmlData(tableId, xmlData, loadingStatus)
+          );
+        }
+      }
+      if (tableXmlPromises.length > 0) {
+        await Promise.all(tableXmlPromises);
+        console.log(`📋 Сохранены XML данные для ${tableXmlPromises.length} таблиц`);
+      }
     }
 
     // Сохраняем XML статусы

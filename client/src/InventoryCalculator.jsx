@@ -1522,69 +1522,99 @@ const InventoryCalculator = () => {
   const CORS_PROXIES = [
     "https://api.allorigins.win/get?url=",
     "https://corsproxy.io/?",
-    "https://cors-anywhere.herokuapp.com/",
     "https://api.codetabs.com/v1/proxy?quest=",
   ];
 
-  const fetchWithCorsHandling = async (url, description, retries = 2) => {
-    const proxyUrl = `/api/fetch-xml?url=${encodeURIComponent(url)}`;
+  const fetchWithCorsHandling = async (url, description) => {
+    // Попытка 1: Напрямую (может сработать, если у пользователя расширение CORS)
+    try {
+      console.log(`📥 Попытка загрузки ${description} напрямую`);
+      const response = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        headers: {
+          Accept: "application/xml, text/xml, */*",
+        },
+      });
+      if (response.ok) {
+        const text = await response.text();
+        console.log(`✅ ${description} загружены напрямую, размер: ${text.length} байт`);
+        return text;
+      }
+    } catch (directError) {
+      console.log(`⚠️ Прямая загрузка не удалась, пробуем прокси...`);
+    }
 
-    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    // Попытка 2: Через наш Netlify proxy
+    try {
+      console.log(`📥 Попытка загрузки ${description} через Netlify proxy`);
+      const proxyUrl = `/api/fetch-xml?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/xml, text/xml, */*",
+        },
+      });
+
+      if (response.ok) {
+        const text = await response.text();
+        console.log(`✅ ${description} загружены через Netlify proxy, размер: ${text.length} байт`);
+        return text;
+      } else {
+        console.log(`⚠️ Netlify proxy вернул ${response.status}, пробуем внешние прокси...`);
+      }
+    } catch (netlifyError) {
+      console.log(`⚠️ Netlify proxy не удался, пробуем внешние прокси...`);
+    }
+
+    // Попытка 3: Через внешние CORS прокси
+    for (let i = 0; i < CORS_PROXIES.length; i++) {
+      const proxy = CORS_PROXIES[i];
       try {
-        console.log(`📥 Загрузка ${description} через proxy (попытка ${attempt}/${retries + 1})`);
+        console.log(`📥 Попытка ${i + 1}/${CORS_PROXIES.length}: ${description} через ${proxy.split('//')[1]?.split('/')[0]}`);
+
+        let proxyUrl;
+        let parseResponse = (response) => response.text();
+
+        if (proxy.includes("allorigins.win")) {
+          proxyUrl = `${proxy}${encodeURIComponent(url)}`;
+          parseResponse = async (response) => {
+            const json = await response.json();
+            if (json.status && json.status.http_code === 200) {
+              return json.contents;
+            }
+            throw new Error(`AllOrigins error: ${json.status ? json.status.http_code : 'unknown'}`);
+          };
+        } else if (proxy.includes("codetabs.com")) {
+          proxyUrl = `${proxy}${encodeURIComponent(url)}`;
+        } else {
+          proxyUrl = `${proxy}${url}`;
+        }
 
         const response = await fetch(proxyUrl, {
           method: "GET",
           headers: {
-            Accept: "application/xml, text/xml, */*",
+            Accept: "application/json, application/xml, text/xml, text/plain, */*",
           },
         });
 
         if (!response.ok) {
-          // Пытаемся получить детали ошибки из ответа
-          let errorDetails = `status ${response.status}`;
-          try {
-            const errorData = await response.json();
-            errorDetails = errorData.error || errorData.message || errorDetails;
-          } catch (e) {
-            // Если не JSON, используем statusText
-            errorDetails = response.statusText || errorDetails;
-          }
-
-          // Для 502 и 504 можем попробовать еще раз
-          const shouldRetry = (response.status === 502 || response.status === 504) && attempt < retries + 1;
-
-          if (shouldRetry) {
-            console.log(`⚠️ Попытка ${attempt} неудачна (${response.status}), повтор через 2 сек...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            continue; // Повторяем попытку
-          }
-
-          const errorMsg = response.status === 502
-            ? `Сервер XML недоступен или перегружен`
-            : response.status === 504
-            ? `Превышено время ожидания загрузки XML (30 сек)`
-            : `Ошибка загрузки: ${errorDetails}`;
-
-          throw new Error(errorMsg);
+          throw new Error(`HTTP ${response.status}`);
         }
 
-        const xmlText = await response.text();
-        console.log(`✅ ${description} загружены, размер: ${xmlText.length} байт`);
+        const xmlText = await parseResponse(response);
+        console.log(`✅ ${description} загружены через ${proxy.split('//')[1]?.split('/')[0]}, размер: ${xmlText.length} байт`);
         return xmlText;
 
-      } catch (error) {
-        // Если это последняя попытка, пробрасываем ошибку
-        if (attempt === retries + 1) {
-          console.error(`❌ Ошибка загрузки ${description} после ${attempt} попыток:`, error);
-          throw new Error(`Не удалось загрузить ${description}: ${error.message}`);
+      } catch (proxyError) {
+        console.log(`⚠️ Прокси ${i + 1} не удался: ${proxyError.message}`);
+        if (i === CORS_PROXIES.length - 1) {
+          throw new Error(`Не удалось загрузить ${description} через все доступные прокси`);
         }
-
-        // Если не последняя попытка и ошибка сети, повторяем
-        console.log(`⚠️ Попытка ${attempt} неудачна, повтор через 2 сек...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
+
+    throw new Error(`Не удалось загрузить ${description}`);
   };
 
   // Функция для форматирования времени последнего обновления
