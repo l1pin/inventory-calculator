@@ -5,6 +5,7 @@ const {
   getAllAppData,
   saveAllAppData,
   deleteTable,
+  getTableData,
   getCrmCategories,
   getItemsByCategory,
   saveItemsToCategory,
@@ -84,19 +85,27 @@ exports.handler = async (event, context) => {
     }
 
     // ============================================================================
-    // DELETE /api/tables/:id - Удалить таблицу
+    // /api/tables/:id endpoints
     // ============================================================================
-    if (httpMethod === 'DELETE' && apiPath.startsWith('/tables/')) {
+    if (apiPath.startsWith('/tables/')) {
       const tableId = apiPath.replace('/tables/', '');
 
-      await deleteTable(tableId);
+      // GET - Получить данные таблицы
+      if (httpMethod === 'GET') {
+        const tableData = await getTableData(tableId);
+        return createResponse(200, tableData);
+      }
 
-      return createResponse(200, {
-        success: true,
-        message: `Таблица ${tableId} успешно удалена`,
-        deletedTableId: tableId,
-        timestamp: new Date().toISOString()
-      });
+      // DELETE - Удалить таблицу
+      if (httpMethod === 'DELETE') {
+        await deleteTable(tableId);
+        return createResponse(200, {
+          success: true,
+          message: `Таблица ${tableId} успешно удалена`,
+          deletedTableId: tableId,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
 
     // ============================================================================
