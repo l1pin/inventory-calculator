@@ -321,15 +321,15 @@ const emptyState = {
 app.delete('/api/tables/:id', async (req, res) => {
   try {
     await ensureDirectories();
-    
+
     const tableId = req.params.id;
-    
+
     if (!tableId) {
       return res.status(400).json({ error: 'ID таблицы не указан' });
     }
-    
+
     console.log(`🗑️ Запрос на удаление таблицы: ${tableId}`);
-    
+
     // Загружаем текущие данные
     let currentData = {};
     try {
@@ -337,58 +337,96 @@ app.delete('/api/tables/:id', async (req, res) => {
       currentData = JSON.parse(data);
     } catch (error) {
       console.log('📂 Основной файл не найден, используем пустое состояние');
-      currentData = { tables: [] };
+      currentData = {
+        tables: [],
+        globalCommissions: {},
+        globalItemChanges: {},
+        xmlLastUpdate: {},
+        xmlDataCounts: {},
+        availableCrmCategories: [],
+        tableXmlData: {},
+        tableXmlLoadingStatus: {},
+        globalCrmData: {},
+        globalPromData: {},
+        globalXmlLoadingStatus: { crm: 'not_loaded', prom: 'not_loaded' }
+      };
     }
-    
+
+    // Нормализуем структуру данных, заполняя отсутствующие поля значениями по умолчанию
+    const normalizedData = {
+      tables: Array.isArray(currentData.tables) ? currentData.tables : [],
+      globalCommissions: (currentData.globalCommissions && typeof currentData.globalCommissions === 'object') ? currentData.globalCommissions : {},
+      globalItemChanges: (currentData.globalItemChanges && typeof currentData.globalItemChanges === 'object') ? currentData.globalItemChanges : {},
+      xmlLastUpdate: (currentData.xmlLastUpdate && typeof currentData.xmlLastUpdate === 'object') ? currentData.xmlLastUpdate : {},
+      xmlDataCounts: (currentData.xmlDataCounts && typeof currentData.xmlDataCounts === 'object') ? currentData.xmlDataCounts : {},
+      availableCrmCategories: Array.isArray(currentData.availableCrmCategories) ? currentData.availableCrmCategories : [],
+      tableXmlData: (currentData.tableXmlData && typeof currentData.tableXmlData === 'object') ? currentData.tableXmlData : {},
+      tableXmlLoadingStatus: (currentData.tableXmlLoadingStatus && typeof currentData.tableXmlLoadingStatus === 'object') ? currentData.tableXmlLoadingStatus : {},
+      globalCrmData: (currentData.globalCrmData && typeof currentData.globalCrmData === 'object') ? currentData.globalCrmData : {},
+      globalPromData: (currentData.globalPromData && typeof currentData.globalPromData === 'object') ? currentData.globalPromData : {},
+      globalXmlLoadingStatus: (currentData.globalXmlLoadingStatus && typeof currentData.globalXmlLoadingStatus === 'object') ? currentData.globalXmlLoadingStatus : { crm: 'not_loaded', prom: 'not_loaded' }
+    };
+
     // Проверяем наличие таблицы
-    if (!Array.isArray(currentData.tables)) {
+    if (!Array.isArray(normalizedData.tables)) {
       return res.status(400).json({ error: 'Некорректная структура данных' });
     }
-    
-    const tableIndex = currentData.tables.findIndex(table => table.id.toString() === tableId.toString());
-    
+
+    const tableIndex = normalizedData.tables.findIndex(table => table.id.toString() === tableId.toString());
+
     if (tableIndex === -1) {
       console.log(`⚠️ Таблица ${tableId} не найдена`);
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: `Таблица ${tableId} уже не существует`,
         deletedTableId: tableId
       });
     }
-    
+
     // Удаляем таблицу
-    const deletedTable = currentData.tables.splice(tableIndex, 1)[0];
-    
+    const deletedTable = normalizedData.tables.splice(tableIndex, 1)[0];
+
     // Очищаем связанные данные
-    if (currentData.tableXmlData && currentData.tableXmlData[tableId]) {
-      delete currentData.tableXmlData[tableId];
+    if (normalizedData.tableXmlData && normalizedData.tableXmlData[tableId]) {
+      delete normalizedData.tableXmlData[tableId];
+      console.log(`🗑️ Удалены XML данные таблицы ${tableId}`);
     }
-    
-    if (currentData.tableXmlLoadingStatus && currentData.tableXmlLoadingStatus[tableId]) {
-      delete currentData.tableXmlLoadingStatus[tableId];
+
+    if (normalizedData.tableXmlLoadingStatus && normalizedData.tableXmlLoadingStatus[tableId]) {
+      delete normalizedData.tableXmlLoadingStatus[tableId];
+      console.log(`🗑️ Удален статус загрузки таблицы ${tableId}`);
     }
-    
+
     // Сохраняем обновленные данные
-    currentData.lastSaved = new Date().toISOString();
-    await safeWriteData(currentData);
-    
-    res.json({ 
-      success: true, 
+    normalizedData.lastSaved = new Date().toISOString();
+
+    console.log(`💾 Сохранение данных после удаления таблицы...`);
+    await safeWriteData(normalizedData);
+    console.log(`✅ Данные успешно сохранены`);
+
+    const responseData = {
+      success: true,
       message: `Таблица "${deletedTable.name}" успешно удалена`,
       deletedTableId: tableId,
       deletedTableName: deletedTable.name,
       timestamp: new Date().toISOString()
-    });
-    
-    console.log(`✅ Таблица "${deletedTable.name}" удалена`);
-    
+    };
+
+    res.json(responseData);
+    console.log(`✅ Таблица "${deletedTable.name}" (ID: ${tableId}) успешно удалена`);
+
   } catch (error) {
     console.error(`❌ Ошибка удаления таблицы ${req.params.id}:`, error);
-    res.status(500).json({ 
-      error: 'Ошибка при удалении таблицы',
-      details: error.message,
-      tableId: req.params.id
-    });
+    console.error(`❌ Стек ошибки:`, error.stack);
+
+    // Убеждаемся, что ответ еще не был отправлен
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Ошибка при удалении таблицы',
+        details: error.message,
+        tableId: req.params.id
+      });
+    }
   }
 });
 
