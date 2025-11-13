@@ -682,6 +682,61 @@ async function saveAllAppData(appData) {
       saveGlobalItemChanges(appData.globalItemChanges || {})
     ]);
 
+    // Сохраняем изменения в таблицах (только если есть данные)
+    // Это нужно для сохранения изменений цен, комментариев и т.д.
+    if (appData.tables && Array.isArray(appData.tables)) {
+      const savePromises = [];
+
+      for (const table of appData.tables) {
+        // Сохраняем только таблицы с данными (пропускаем пустые метаданные)
+        if (table.data && Array.isArray(table.data) && table.data.length > 0) {
+          console.log(`💾 Сохранение ${table.data.length} записей таблицы ${table.id}`);
+
+          // Преобразуем данные в формат БД
+          const items = table.data.map(item => ({
+            table_id: table.id,
+            item_id: item.id,
+            base_cost: item.baseCost,
+            total_cost: item.totalCost,
+            commission: item.commission,
+            stock: item.stock,
+            days_stock: item.daysStock,
+            sales_month: item.salesMonth,
+            applications_month: item.applicationsMonth,
+            sales_2weeks: item.sales2Weeks,
+            applications_2weeks: item.applications2Weeks,
+            markup50_12: item.markup50_12,
+            new_price: item.newPrice,
+            price_history: item.priceHistory || [],
+            comments: item.comments || [],
+            crm_price: item.crmPrice,
+            crm_stock: item.crmStock,
+            crm_category_id: item.crmCategoryId,
+            crm_category_name: item.crmCategoryName,
+            prom_price: item.promPrice,
+            markup10: item.markup10,
+            markup20: item.markup20,
+            markup30: item.markup30,
+            markup40: item.markup40,
+            markup50: item.markup50,
+            markup60: item.markup60,
+            markup70: item.markup70,
+            markup80: item.markup80,
+            markup90: item.markup90,
+            markup100: item.markup100
+          }));
+
+          // Сохраняем items пакетами
+          savePromises.push(createTableItems(items));
+        }
+      }
+
+      if (savePromises.length > 0) {
+        await Promise.all(savePromises);
+        console.log(`✅ Сохранено ${savePromises.length} таблиц с данными`);
+      }
+    }
+
     // Сохраняем XML данные
     if (appData.globalCrmData && Object.keys(appData.globalCrmData).length > 0) {
       await saveGlobalXmlData('crm', appData.globalCrmData);
@@ -707,7 +762,7 @@ async function saveAllAppData(appData) {
       )
     ]);
 
-    console.log('✅ Данные успешно сохранены в БД');
+    console.log('✅ Все данные успешно сохранены в БД');
     return true;
   } catch (error) {
     console.error('Ошибка сохранения данных в БД:', error);

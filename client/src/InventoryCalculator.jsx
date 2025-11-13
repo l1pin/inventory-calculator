@@ -869,11 +869,32 @@ const InventoryCalculator = () => {
         });
       }
 
+      // Сохраняем данные только для активной таблицы (оптимизация размера запроса)
+      // Это позволяет сохранять изменения (цены, комментарии) при автосохранении
+      // без превышения лимитов размера запроса
+      const tablesToSave = Array.isArray(tables)
+        ? tables.map(table => {
+            // Отправляем данные только для активной таблицы
+            const isActiveTable = table.id === activeTableId;
+            const shouldSaveData = isActiveTable && table.data && table.data.length > 0;
+
+            return {
+              id: table.id,
+              name: table.name,
+              fileName: table.fileName,
+              uploadTime: table.uploadTime,
+              filters: table.filters,
+              data: shouldSaveData ? table.data : []
+            };
+          })
+        : [];
+
       const dataToSave = {
-        tables: Array.isArray(tables) ? tables : [],
+        tables: tablesToSave,
         globalCommissions: globalCommissions || {},
         globalItemChanges: globalItemChanges || {},
         xmlLastUpdate: xmlLastUpdate || {},
+        xmlDataCounts: xmlDataCounts || {},
         availableCrmCategories: Array.isArray(availableCrmCategories)
           ? availableCrmCategories
           : [],
@@ -954,10 +975,37 @@ const InventoryCalculator = () => {
 
       if (data.tables && Array.isArray(data.tables) && data.tables.length > 0) {
         console.log(`📋 Восстанавливаем ${data.tables.length} таблиц`);
-        setTables(data.tables);
-        setActiveTableId(data.tables[0].id);
+        // Инициализируем фильтры для каждой таблицы, если их нет
+        const tablesWithFilters = data.tables.map(table => ({
+          ...table,
+          filters: table.filters || {
+            searchId: "",
+            rangeFilters: {
+              baseCost: { min: "", max: "" },
+              stock: { min: "", max: "" },
+              daysStock: { min: "", max: "" },
+              salesMonth: { min: "", max: "" },
+              applicationsMonth: { min: "", max: "" },
+              sales2Weeks: { min: "", max: "" },
+              applications2Weeks: { min: "", max: "" },
+              crmStock: { min: "", max: "" },
+              crmPrice: { min: "", max: "" },
+              promPrice: { min: "", max: "" },
+            },
+            priceChangeFilter: "all",
+            currentPage: 1,
+            itemsPerPage: 100,
+            showOnlyProm: false,
+            hiddenCrmCategories: ["93", "55", "52", "46", "16", "000000025"],
+            hideCrmStockZero: false,
+            hideCrmStockLowSix: false,
+            sortConfig: { key: null, direction: "asc" }
+          }
+        }));
+        setTables(tablesWithFilters);
+        setActiveTableId(tablesWithFilters[0].id);
         setCurrentSection("table");
-        console.log(`✅ Активная таблица: ${data.tables[0].name}`);
+        console.log(`✅ Активная таблица: ${tablesWithFilters[0].name}`);
       }
 
       if (
@@ -2342,10 +2390,9 @@ const InventoryCalculator = () => {
 
   // Предварительно нормализуем поисковый запрос
   const normalizedSearchTerm = useMemo(() => {
-    return currentFilters.searchId.trim()
-      ? normalizeId(currentFilters.searchId)
-      : "";
-  }, [currentFilters.searchId]);
+    const searchId = currentFilters?.searchId || "";
+    return searchId.trim() ? normalizeId(searchId) : "";
+  }, [currentFilters]);
 
   const filteredData = useMemo(() => {
     let filtered = dataWithXml;
