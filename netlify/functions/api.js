@@ -35,7 +35,7 @@ const parseBody = (body) => {
 
 // Главный обработчик
 exports.handler = async (event, context) => {
-  const { httpMethod, path, body } = event;
+  const { httpMethod, path, body, rawUrl } = event;
 
   // Обработка CORS preflight
   if (httpMethod === 'OPTIONS') {
@@ -43,10 +43,20 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Извлекаем путь после /api/
-    const apiPath = path.replace('/.netlify/functions/api', '');
+    // Извлекаем путь после /api/ из rawUrl или path
+    // Netlify перенаправляет /api/* → /.netlify/functions/api/*
+    // rawUrl содержит оригинальный путь: https://site.netlify.app/api/data
+    let apiPath = '';
+    if (rawUrl && rawUrl.includes('/api/')) {
+      // Извлекаем путь из rawUrl
+      const url = new URL(rawUrl);
+      apiPath = url.pathname.replace('/api', '');
+    } else {
+      // Fallback: используем path
+      apiPath = path.replace('/.netlify/functions/api', '');
+    }
 
-    console.log(`${httpMethod} ${apiPath}`);
+    console.log(`${httpMethod} ${apiPath} (rawUrl: ${rawUrl}, path: ${path})`);
 
     // ============================================================================
     // GET /api/data - Получить все данные
